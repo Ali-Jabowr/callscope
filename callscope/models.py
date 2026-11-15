@@ -87,6 +87,30 @@ Outcome = Literal[
 ]
 
 
+CallType = Literal[
+    "новая_продажа",
+    "продление",
+    "поддержка",
+    "допродажа",
+    "нецелевой",
+    "прочее",
+]
+
+CheckStatus = Literal["выполнено", "не_выполнено", "неясно"]
+
+
+class StandardCheck(BaseModel):
+    """Оценка одного критерия стандарта продаж. Статус модели код может только
+    ослабить (до «неясно»), если цитата не нашлась в расшифровке."""
+
+    criterion_id: str
+    title: str
+    status: CheckStatus
+    comment: str = ""
+    evidence: list[Evidence] = Field(default_factory=list)
+    flags: list[str] = Field(default_factory=list)
+
+
 class CallAnalysis(BaseModel):
     """Итоговый разбор одного звонка — 7 полей из ТЗ + служебное."""
 
@@ -102,6 +126,7 @@ class CallAnalysis(BaseModel):
     transcript: str = ""  # текст разговора из файла, не от модели; для показа в UI
 
     # --- 7 обязательных полей ТЗ ---
+    call_type: CallType = "прочее"
     summary: str  # итог разговора
     outcome: Outcome = "требует_уточнения"
     next_steps: list[NextStep] = Field(
@@ -119,6 +144,9 @@ class CallAnalysis(BaseModel):
     constraints: list[Constraint] = Field(default_factory=list)
     decision_makers: list[str] = Field(default_factory=list)
     all_dates: list[DateRef] = Field(default_factory=list)
+
+    # аудит по стандарту продаж; остаётся только при call_type == "новая_продажа"
+    standard: list[StandardCheck] = Field(default_factory=list)
 
     # --- служебное, заполняется валидаторами ---
     validation_flags: list[str] = Field(default_factory=list)

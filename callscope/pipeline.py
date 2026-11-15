@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from typing import Any
 
 from pydantic import ValidationError
 
@@ -13,10 +14,18 @@ from .prompt import SYSTEM, build_user_message
 from .providers import LLMProvider, extract_json
 from .validate import validate
 
+MIN_WORDS = 60  # короче — разговор без содержания, модель не вызываем
+
 
 def analyze_one(t: Transcript, provider: LLMProvider) -> CallAnalysis:
-    raw = provider.complete(SYSTEM, build_user_message(t))
-    data = extract_json(raw)
+    if len(t.body.split()) < MIN_WORDS:
+        data: dict[str, Any] = {
+            "call_type": "нецелевой",
+            "summary": "Короткий звонок, без содержательного разговора",
+            "outcome": "требует_уточнения",
+        }
+    else:
+        data = extract_json(provider.complete(SYSTEM, build_user_message(t)))
 
     # метаданные ставим сами — модель к ним не допускается
     data["source_file"] = t.name
