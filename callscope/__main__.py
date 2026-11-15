@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from datetime import date
 from pathlib import Path
 
 from .models import CallAnalysis
@@ -75,6 +76,58 @@ def cmd_eval(args: argparse.Namespace) -> int:
     return run_eval(Path(args.source), Path(args.gold))
 
 
+def _iso_date(value: str) -> date:
+    try:
+        return date.fromisoformat(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(
+            f"ожидается дата ГГГГ-ММ-ДД, получено {value!r}"
+        ) from exc
+
+
+def _load_for_ui(source: str) -> list[CallAnalysis] | None:
+    from .web import load_results
+
+    try:
+        return load_results(Path(source))
+    except (OSError, ValueError) as exc:  # нет файла, битый JSON, не та схема
+        print(f"Не удалось прочитать {source}: {exc}", file=sys.stderr)
+        return None
+
+
+def cmd_site(args: argparse.Namespace) -> int:
+    from .web import build_site
+
+    results = _load_for_ui(args.source)
+    if results is None:
+        return 1
+    out = Path(args.out)
+    build_site(results, args.as_of or date.today(), out)
+    print(f"Сайт: {out / 'index.html'}")
+    return 0
+
+
+def cmd_serve(args: argparse.Namespace) -> int:
+    from .web import HOST, make_server
+
+    results = _load_for_ui(args.source)
+    if results is None:
+        return 1
+    try:
+        server = make_server(results, args.as_of or date.today(), args.port)
+    except OSError as exc:
+        print(f"Не удалось занять порт {args.port}: {exc}", file=sys.stderr)
+        return 1
+    print(f"Откройте http://{HOST}:{args.port}/  (Ctrl+C — остановить)")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\nОстановлено.")
+    finally:
+        server.server_close()
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
         prog="callscope",
@@ -111,6 +164,24 @@ def main(argv: list[str] | None = None) -> int:
     ev.add_argument("--source", default="out/analysis.json")
     ev.add_argument("--gold", default="demo/gold.yaml")
     ev.set_defaults(func=cmd_eval)
+
+    sv = sub.add_parser("serve", help="локальный веб-интерфейс (127.0.0.1)")
+    sv.add_argument("--source", default="out/analysis.json")
+    sv.add_argument(
+        "--as-of", type=_iso_date, default=None, help="дата отсчёта, ГГГГ-ММ-ДД"
+    )
+    sv.add_argument("--port", type=int, default=8000)
+    sv.set_defaults(func=cmd_serve)
+
+    st = sub.add_parser(
+        "site", help="записать страницы интерфейса как статический HTML"
+    )
+    st.add_argument("--source", default="out/analysis.json")
+    st.add_argument(
+        "--as-of", type=_iso_date, default=None, help="дата отсчёта, ГГГГ-ММ-ДД"
+    )
+    st.add_argument("-o", "--out", default="out/site")
+    st.set_defaults(func=cmd_site)
 
     args = p.parse_args(argv)
     return int(args.func(args))
