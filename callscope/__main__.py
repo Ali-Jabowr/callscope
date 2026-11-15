@@ -78,28 +78,34 @@ def cmd_eval(args: argparse.Namespace) -> int:
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
         prog="callscope",
-        description="Структурированный разбор клиентских звонков с контролем галлюцинаций",
+        description=(
+            "Структурированный разбор клиентских звонков с контролем галлюцинаций"
+        ),
     )
     sub = p.add_subparsers(dest="cmd", required=True)
 
     r = sub.add_parser("run", help="прогнать транскрипты через LLM и собрать отчёт")
     r.add_argument("transcripts", nargs="?", default="transcripts")
     r.add_argument("-o", "--out", default="out")
-    r.add_argument("--provider", default="claude",
-                   help="claude | claude:model | openai | openai:model")
+    r.add_argument(
+        "--provider",
+        default="claude",
+        help="claude | claude:model | openai | openai:model",
+    )
     r.add_argument("--workers", type=int, default=4)
     r.set_defaults(func=cmd_run)
 
-    rp = sub.add_parser("report", help="пересобрать отчёт из сохранённого JSON, без LLM")
+    rp = sub.add_parser(
+        "report", help="пересобрать отчёт из сохранённого JSON, без LLM"
+    )
     rp.add_argument("--source", default="out/analysis.json")
-    rp.add_argument("--transcripts", default="transcripts",
-                    help="каталог транскриптов для повторной сверки цитат и дат")
+    rp.add_argument(
+        "--transcripts",
+        default="transcripts",
+        help="каталог транскриптов для повторной сверки цитат и дат",
+    )
     rp.add_argument("-o", "--out", default="out")
     rp.set_defaults(func=cmd_report)
-
-    st = sub.add_parser("selftest", help="проверить резолвер дат и защиту от галлюцинаций (без LLM)")
-    st.set_defaults(func=lambda a: __import__(
-        "callscope.selftest", fromlist=["run_selftest"]).run_selftest())
 
     ev = sub.add_parser("eval", help="сверить результат с ручным эталоном")
     ev.add_argument("--source", default="out/analysis.json")
@@ -107,7 +113,7 @@ def main(argv: list[str] | None = None) -> int:
     ev.set_defaults(func=cmd_eval)
 
     args = p.parse_args(argv)
-    return args.func(args)
+    return int(args.func(args))
 
 
 if __name__ == "__main__":

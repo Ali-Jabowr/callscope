@@ -16,11 +16,12 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from collections.abc import Sequence
 from pathlib import Path
 
 from .dates import WEEKDAY_PATTERNS, resolve
 from .ingest import RU_MONTHS, WEEKDAYS_RU, Transcript, load
-from .models import CallAnalysis, DateRef
+from .models import CallAnalysis, DateRef, Item, NextStep
 
 # 1 → «января», для достройки выражений без месяца
 MONTH_NAME = {num: word for word, num in RU_MONTHS.items()}
@@ -43,12 +44,13 @@ def normalize(s: str) -> str:
 
 # ---------------------------------------------------------------- 1. grounding
 
+
 def check_grounding(analysis: CallAnalysis, transcript: Transcript) -> tuple[int, int]:
     """Помечает каждую цитату verified=True/False. Возвращает (подтверждено, всего)."""
     haystack = normalize(transcript.body)
     total = verified = 0
 
-    def verify_list(items, label: str) -> None:
+    def verify_list(items: Sequence[Item | NextStep], label: str) -> None:
         nonlocal total, verified
         for item in items:
             ok_any = False
@@ -97,6 +99,7 @@ def _all_date_refs(analysis: CallAnalysis) -> list[DateRef]:
 
 # ------------------------------------------------------- 2-4. проверки по датам
 
+
 def check_dates(analysis: CallAnalysis, transcript: Transcript) -> None:
     anchor = transcript.call_date
     for dr in _all_date_refs(analysis):
@@ -105,7 +108,11 @@ def check_dates(analysis: CallAnalysis, transcript: Transcript) -> None:
         # «после двадцатого» без месяца резолвер не берёт. Достраиваем месяцем
         # из предложения модели: месяцу доверяем, арифметику дня всё равно
         # считаем сами — иначе пришлось бы принять дату модели целиком.
-        if res.resolved is None and res.precision == "relative_unresolved" and dr.resolved_by_llm:
+        if (
+            res.resolved is None
+            and res.precision == "relative_unresolved"
+            and dr.resolved_by_llm
+        ):
             month_word = MONTH_NAME.get(dr.resolved_by_llm.month)
             if month_word:
                 retry = resolve(f"{dr.raw_expression} {month_word}", anchor)
@@ -190,12 +197,13 @@ def check_completeness(analysis: CallAnalysis, transcript: Transcript) -> None:
         )
 
     if analysis.next_action_date is None or analysis.next_action_date.resolved is None:
-        dated = [s for s in agreed if s.date and s.date.resolved]
+        dated = [(s.date.resolved, s) for s in agreed if s.date and s.date.resolved]
         if dated:
-            nearest = min(dated, key=lambda s: s.date.resolved)  # type: ignore[union-attr,arg-type]
+            _, nearest = min(dated, key=lambda pair: pair[0])
             analysis.next_action_date = nearest.date
             analysis.validation_flags.append(
-                "next_action_date восстановлена как ближайшая дата из согласованных шагов"
+                "next_action_date восстановлена как ближайшая дата "
+                "из согласованных шагов"
             )
         else:
             analysis.data_gaps.append(
@@ -212,6 +220,7 @@ def check_completeness(analysis: CallAnalysis, transcript: Transcript) -> None:
 
 
 # --------------------------------------------------------------- точка входа
+
 
 def validate(analysis: CallAnalysis, transcript: Transcript) -> CallAnalysis:
     verified, total = check_grounding(analysis, transcript)
@@ -237,14 +246,19 @@ def revalidate(analysis: CallAnalysis, transcript_path: Path) -> CallAnalysis:
     """
     t = load(transcript_path)
 
-    def reset_items(items: list) -> None:
+    def reset_items(items: Sequence[Item | NextStep]) -> None:
         for item in items:
             item.flags = []
             for ev in item.evidence:
                 ev.verified = None
 
-    for group in (analysis.client_needs, analysis.risks, analysis.manager_mistakes,
-                  analysis.needs_supervisor_attention, analysis.next_steps):
+    for group in (
+        analysis.client_needs,
+        analysis.risks,
+        analysis.manager_mistakes,
+        analysis.needs_supervisor_attention,
+        analysis.next_steps,
+    ):
         reset_items(group)
     for c in analysis.constraints:
         for ev in c.evidence:
