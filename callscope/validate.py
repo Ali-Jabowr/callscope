@@ -172,6 +172,33 @@ def check_dates(analysis: CallAnalysis, transcript: Transcript) -> None:
             )
 
 
+# ------------------------------------------------- стандарт продаж
+
+UNVERIFIED_STANDARD_FLAG = "цитата не найдена в расшифровке"
+NO_QUOTE_STANDARD_FLAG = "нет цитаты-доказательства"
+
+
+def check_standard(analysis: CallAnalysis, transcript: Transcript) -> None:
+    """Аудит по стандарту имеет смысл только для новой продажи; остальное отбрасываем.
+    Если хоть одна цитата критерия не найдена в расшифровке — статус «неясно»:
+    решает код, а не модель."""
+    if analysis.call_type != "новая_продажа":
+        analysis.standard = []
+        return
+
+    haystack = normalize(transcript.body)
+    for check in analysis.standard:
+        for ev in check.evidence:
+            needle = normalize(ev.quote)
+            ev.verified = bool(needle) and needle in haystack
+        if not all(ev.verified for ev in check.evidence):
+            check.status = "неясно"
+            check.flags.append(UNVERIFIED_STANDARD_FLAG)
+        elif not check.evidence and check.status == "выполнено":
+            check.status = "неясно"
+            check.flags.append(NO_QUOTE_STANDARD_FLAG)
+
+
 # --------------------------------------------------------- 5. полнота
 
 REQUIRED = {
@@ -230,6 +257,7 @@ def validate(analysis: CallAnalysis, transcript: Transcript) -> CallAnalysis:
             f"Цитаты: подтверждено {verified} из {total}. "
             f"Неподтверждённые помечены в карточках."
         )
+    check_standard(analysis, transcript)
     check_dates(analysis, transcript)
     check_completeness(analysis, transcript)
     return analysis
@@ -260,6 +288,10 @@ def revalidate(analysis: CallAnalysis, transcript_path: Path) -> CallAnalysis:
         analysis.next_steps,
     ):
         reset_items(group)
+    for check in analysis.standard:
+        check.flags = []
+        for ev in check.evidence:
+            ev.verified = None
     for c in analysis.constraints:
         for ev in c.evidence:
             ev.verified = None
