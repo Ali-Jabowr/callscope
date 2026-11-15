@@ -23,6 +23,8 @@ def analyze_one(t: Transcript, provider: LLMProvider) -> CallAnalysis:
     data["call_date"] = t.call_date.isoformat()
     data["call_weekday"] = t.weekday
     data["company"] = t.company
+    data["client_id"] = t.client_id
+    data["transcript"] = t.body
     data["manager"] = t.manager
     data["client_contact"] = t.client_contact
 

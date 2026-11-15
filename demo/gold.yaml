@@ -1,0 +1,159 @@
+# Ручной эталон для демо-набора demo/transcripts (синтетические данные «ТехноПоток»).
+# Даты посчитаны вручную от даты разговора из шапки каждого файла.
+# Ключевые слова — основы слов: сверка идёт по подстроке после нормализации.
+
+01_vektor_stroy_pervyy.md:
+  # 2 ноября (пн): демонстрация «в следующий вторник, 10 ноября, в 11:00»;
+  # выгрузку клиент обещает «до четверга» = 5 ноября
+  outcome: продвижение
+  next_action_date: "2026-11-10"
+  next_action_time: "11:00"
+  next_action_year: 2026
+  dates_present: ["2026-11-05", "2026-11-10"]
+  no_date_before_call: true
+  grounding_min: 0.8
+  needs_cover:
+    - ["остатк"]
+    - ["потер", "расхожд"]
+  risks_cover:
+    - ["олег", "прораб", "кладовщик"]
+  decision_makers_cover:
+    - ["елен", "финансов"]
+    - ["олег", "прораб"]
+
+02_vektor_stroy_demo.md:
+  # 10 ноября (вт): КП «не позже восемнадцатого» = 18 ноября; комитет 20 ноября
+  outcome: продвижение
+  next_action_date: "2026-11-18"
+  next_action_year: 2026
+  dates_present: ["2026-11-18", "2026-11-20"]
+  no_date_before_call: true
+  grounding_min: 0.8
+  needs_cover:
+    - ["окупаемост"]
+    - ["точн"]
+  risks_cover:
+    - ["два месяц", "сезон", "весн"]
+  mistakes_cover:
+    - ["около", "приблизит", "точн"]
+  decision_makers_cover:
+    - ["комитет", "елен", "финансов"]
+
+03_zelenyy_dvor_prodlenie.md:
+  # 3 ноября (вт): ответ от поддержки «до пятницы» = 6 ноября; лицензия до 30 ноября
+  outcome: продвижение
+  next_action_date: "2026-11-06"
+  next_action_year: 2026
+  dates_present: ["2026-11-06", "2026-11-30"]
+  no_date_before_call: true
+  grounding_min: 0.8
+  needs_cover:
+    - ["отчёт", "отчет"]
+  risks_cover:
+    - ["уйд", "не продл", "отказ"]
+    - ["дешевле", "друг", "конкурент"]
+  attention_cover:
+    - ["отток", "уйд", "не продл", "продлен"]
+  decision_makers_cover:
+    - ["директор"]
+
+04_medplus_podderzhka.md:
+  # 4 ноября (ср): письменный разбор «до пятницы, шестого ноября»
+  outcome: продвижение
+  next_action_date: "2026-11-06"
+  next_action_year: 2026
+  dates_present: ["2026-11-06"]
+  no_date_before_call: true
+  grounding_min: 0.8
+  needs_cover:
+    - ["письменн", "разбор", "причин"]
+  risks_cover:
+    - ["декабр", "друг", "пик"]
+  mistakes_cover:
+    - ["постараюсь", "срок", "дат"]
+  attention_cover:
+    - ["второй раз", "повтор", "сбо"]
+
+05_logistik_yug_novaya.md:
+  # 5 ноября (чт): договорённость только «пришлите презентацию», срока нет
+  outcome: требует_уточнения
+  next_action_date: null
+  grounding_min: 0.8
+  needs_cover:
+    - ["скорост", "отгруз"]
+    - ["кросс"]
+  mistakes_cover:
+    - ["перечис", "функционал", "потребност", "выясн"]
+    - ["клиентов с", "кейс", "пример", "не смог"]
+
+06_kolos_netselevoy.md:
+  # 5 ноября (чт): заявки не было, разговор закрыт
+  outcome: отказ
+  next_action_date: null
+  grounding_min: 0.8
+
+07_altair_apsell.md:
+  # 6 ноября (пт): расчёт «до первого декабря»; бюджет утверждают 15 декабря
+  outcome: продвижение
+  next_action_date: "2026-12-01"
+  next_action_year: 2026
+  dates_present: ["2026-12-01", "2026-12-15"]
+  no_date_before_call: true
+  grounding_min: 0.8
+  needs_cover:
+    - ["маркиров"]
+    - ["лиценз", "расшир", "магазин"]
+  risks_cover:
+    - ["zebra", "тсд", "совместим"]
+  attention_cover:
+    - ["расшир", "маркиров", "допродаж", "апсел"]
+
+08_severnyy_port_otkaz.md:
+  # 9 ноября (пн): отказ; предложение «вернуться через полгода» не принято
+  outcome: отказ
+  next_action_date: null
+  grounding_min: 0.8
+  not_in_agreed_steps:
+    - ["полгода"]
+  risks_cover:
+    - ["облак", "головн", "москв"]
+  constraints_cover:
+    - ["не звон"]
+  decision_makers_cover:
+    - ["москв", "головн"]
+
+09_vektor_stroy_kp.md:
+  # 19 ноября (чт): цена очного обучения «до шести вечера» сегодня;
+  # звонок клиента после комитета «в пятницу или понедельник» = 20 или 23 ноября
+  outcome: продвижение
+  next_action_date: "2026-11-19"
+  next_action_time: "18:00"
+  next_action_year: 2026
+  dates_present: ["2026-11-19", "2026-11-20", "2026-11-23"]
+  no_date_before_call: true
+  grounding_min: 0.8
+  needs_cover:
+    - ["очн"]
+  risks_cover:
+    - ["интернет", "очн", "обучен"]
+  mistakes_cover:
+    - ["срок", "обещ", "задерж", "опозд", "не до"]
+  attention_cover:
+    - ["срок", "задерж", "недовол", "комитет"]
+  decision_makers_cover:
+    - ["елен", "комитет"]
+
+10_zelenyy_dvor_vozvrat.md:
+  # 10 ноября (вт): клиент проверяет отчёт «завтра» = 11 ноября, ответ «в четверг» = 12 ноября
+  outcome: продвижение
+  next_action_date: "2026-11-12"
+  next_action_year: 2026
+  dates_present: ["2026-11-11", "2026-11-12"]
+  no_date_before_call: true
+  grounding_min: 0.8
+  needs_cover:
+    - ["отчёт", "отчет"]
+  risks_cover:
+    - ["директор", "не заработ", "отчёт", "отчет"]
+  mistakes_cover:
+    - ["до пятниц", "срок", "обещ", "задерж", "опозд"]

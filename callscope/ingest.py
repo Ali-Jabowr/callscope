@@ -37,6 +37,39 @@ WEEKDAYS_RU = [
 ]
 
 
+_TRANSLIT = {
+    **dict(
+        zip(
+            "абвгдезийклмнопрстуфъыьэ",
+            ["a", "b", "v", "g", "d", "e", "z", "i", "y", "k", "l", "m", "n", "o"]
+            + ["p", "r", "s", "t", "u", "f", "", "y", "", "e"],
+            strict=True,
+        )
+    ),
+    "ё": "e",
+    "ж": "zh",
+    "х": "kh",
+    "ц": "ts",
+    "ч": "ch",
+    "ш": "sh",
+    "щ": "shch",
+    "ю": "yu",
+    "я": "ya",
+}
+
+
+def client_slug(company: str | None) -> str | None:
+    """Стабильный идентификатор клиента из названия компании.
+
+    Нужен, чтобы звонки одного клиента собирались в цепочку без LLM.
+    """
+    if not company:
+        return None
+    latin = "".join(_TRANSLIT.get(ch, ch) for ch in company.lower())
+    slug = re.sub(r"[^a-z0-9]+", "-", latin).strip("-")
+    return slug or None
+
+
 @dataclass
 class Transcript:
     path: Path
@@ -49,6 +82,10 @@ class Transcript:
     manager: str | None
     client_contact: str | None
     header_conflicts: list[str]
+
+    @property
+    def client_id(self) -> str | None:
+        return client_slug(self.company)
 
     @property
     def name(self) -> str:
@@ -69,7 +106,7 @@ def _parse_date(header: str) -> date | None:
 def _parse_participants(header: str) -> tuple[str | None, str | None, str | None]:
     """Разбирает строку участников.
 
-    Пример: «Анна — менеджер интегратора; Сергей — финансовый директор клиента
+    Пример: «Анна — менеджер отдела продаж; Сергей — финансовый директор клиента
     «Альфа-Металл»».
     """
     manager = client = company = None
@@ -84,7 +121,7 @@ def _parse_participants(header: str) -> tuple[str | None, str | None, str | None
         if not nm:
             continue
         person, role = nm.group(1), nm.group(2)
-        if "менеджер интегратора" in role.lower():
+        if role.lower().startswith("менеджер"):
             manager = person
         else:
             client = person
