@@ -109,7 +109,7 @@ def main(argv: list[str] | None = None) -> int:
 
     ev = sub.add_parser("eval", help="сверить результат с ручным эталоном")
     ev.add_argument("--source", default="out/analysis.json")
-    ev.add_argument("--gold", default="gold/gold.yaml")
+    ev.add_argument("--gold", default="demo/gold.yaml")
     ev.set_defaults(func=cmd_eval)
 
     args = p.parse_args(argv)

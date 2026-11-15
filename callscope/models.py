@@ -95,8 +95,11 @@ class CallAnalysis(BaseModel):
     call_date: date
     call_weekday: str
     company: str | None = None
+    client_id: str | None = None  # слаг компании; общий для звонков одного клиента
     manager: str | None = None
     client_contact: str | None = None
+
+    transcript: str = ""  # текст разговора из файла, не от модели; для показа в UI
 
     # --- 7 обязательных полей ТЗ ---
     summary: str  # итог разговора
