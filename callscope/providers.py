@@ -13,7 +13,7 @@ import os
 import re
 import subprocess
 import urllib.request
-from typing import Protocol
+from typing import Any, Protocol
 
 
 class LLMError(RuntimeError):
@@ -26,20 +26,23 @@ class LLMProvider(Protocol):
     def complete(self, system: str, user: str) -> str: ...
 
 
-def extract_json(text: str) -> dict:
+def extract_json(text: str) -> dict[str, Any]:
     """Модели любят оборачивать JSON в ```json ... ```. Достаём объект надёжно."""
     text = text.strip()
     fence = re.search(r"```(?:json)?\s*(.+?)\s*```", text, re.DOTALL)
     if fence:
         text = fence.group(1).strip()
     try:
-        return json.loads(text)
+        parsed: dict[str, Any] = json.loads(text)
     except json.JSONDecodeError:
         pass
+    else:
+        return parsed
     # последний шанс: самый внешний {...}
     start, end = text.find("{"), text.rfind("}")
     if start != -1 and end > start:
-        return json.loads(text[start : end + 1])
+        outer: dict[str, Any] = json.loads(text[start : end + 1])
+        return outer
     raise LLMError(f"Не удалось извлечь JSON из ответа модели:\n{text[:500]}")
 
 
@@ -58,23 +61,32 @@ class ClaudeCLIProvider:
 
     def complete(self, system: str, user: str) -> str:
         cmd = [
-            "claude", "-p", user,
-            "--output-format", "json",
-            "--model", self.model,
-            "--system-prompt", system,
-            "--mcp-config", '{"mcpServers":{}}',
+            "claude",
+            "-p",
+            user,
+            "--output-format",
+            "json",
+            "--model",
+            self.model,
+            "--system-prompt",
+            system,
+            "--mcp-config",
+            '{"mcpServers":{}}',
             "--strict-mcp-config",
-            "--disallowedTools", "Bash,Read,Write,Edit,Glob,Grep,WebSearch,WebFetch,Task",
+            "--disallowedTools",
+            "Bash,Read,Write,Edit,Glob,Grep,WebSearch,WebFetch,Task",
         ]
         try:
-            proc = subprocess.run(
+            proc = subprocess.run(  # noqa: S603  # argv-список, shell не используется; бинарь фиксирован
                 cmd, capture_output=True, text=True, timeout=self.timeout, check=False
             )
         except subprocess.TimeoutExpired as e:
             raise LLMError(f"claude CLI не ответил за {self.timeout}с") from e
 
         if proc.returncode != 0:
-            raise LLMError(f"claude CLI вернул код {proc.returncode}: {proc.stderr[:400]}")
+            raise LLMError(
+                f"claude CLI вернул код {proc.returncode}: {proc.stderr[:400]}"
+            )
 
         try:
             envelope = json.loads(proc.stdout)
@@ -85,8 +97,11 @@ class ClaudeCLIProvider:
         if envelope.get("is_error"):
             raise LLMError(f"claude CLI: {envelope.get('result', '')[:400]}")
         if "result" not in envelope:
-            raise LLMError(f"claude CLI: в ответе нет поля result: {str(envelope)[:400]}")
-        return envelope["result"]
+            raise LLMError(
+                f"claude CLI: в ответе нет поля result: {str(envelope)[:400]}"
+            )
+        result: str = envelope["result"]
+        return result
 
 
 class OpenAICompatProvider:
@@ -103,8 +118,12 @@ class OpenAICompatProvider:
         timeout: int = 600,
     ) -> None:
         self.model = model
-        self.base_url = (base_url or os.getenv("LLM_BASE_URL") or "https://api.openai.com/v1").rstrip("/")
-        self.api_key = api_key or os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY") or ""
+        self.base_url = (
+            base_url or os.getenv("LLM_BASE_URL") or "https://api.openai.com/v1"
+        ).rstrip("/")
+        self.api_key = (
+            api_key or os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY") or ""
+        )
         self.timeout = timeout
 
     def complete(self, system: str, user: str) -> str:
@@ -117,7 +136,7 @@ class OpenAICompatProvider:
             "temperature": 0,
             "response_format": {"type": "json_object"},
         }
-        req = urllib.request.Request(
+        req = urllib.request.Request(  # noqa: S310  # base_url задаёт оператор через конфиг, не клиент
             f"{self.base_url}/chat/completions",
             data=json.dumps(payload).encode(),
             headers={
@@ -126,11 +145,14 @@ class OpenAICompatProvider:
             },
         )
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as r:
+            with urllib.request.urlopen(  # noqa: S310  # схему задаёт оператор через base_url
+                req, timeout=self.timeout
+            ) as r:
                 data = json.loads(r.read())
-        except Exception as e:  # noqa: BLE001 — в MVP любую сетевую ошибку заворачиваем
+        except Exception as e:  # в MVP любую сетевую ошибку заворачиваем
             raise LLMError(f"{self.base_url}: {e}") from e
-        return data["choices"][0]["message"]["content"]
+        content: str = data["choices"][0]["message"]["content"]
+        return content
 
 
 def get_provider(spec: str) -> LLMProvider:

@@ -17,33 +17,61 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 
 from .ingest import RU_MONTHS, WEEKDAYS_RU
+from .models import DatePrecision
 
 # Паттерны вместо голых подстрок: «средства» и «в среднем» не должны
 # превращаться в среду, а «5 машин» — в 5 мая. Стем обязан стоять отдельным
 # словом (\b) и для коротких основ задан класс окончаний.
 WEEKDAY_PATTERNS = [
-    ("понедельник", 0), ("вторник", 1), ("сред[ауеыо]", 2), ("четверг", 3),
-    ("пятниц", 4), ("суббот", 5), ("воскресень", 6),
+    ("понедельник", 0),
+    ("вторник", 1),
+    ("сред[ауеыо]", 2),
+    ("четверг", 3),
+    ("пятниц", 4),
+    ("суббот", 5),
+    ("воскресень", 6),
 ]
 
 # фрагменты регулярки → номер месяца; «ма» без класса ловила «5 машин» как 5 мая
 MONTH_STEMS = {
-    "январ": 1, "феврал": 2, "март": 3, "апрел": 4, "ма[йяюе]": 5, "июн": 6,
-    "июл": 7, "август": 8, "сентябр": 9, "октябр": 10, "ноябр": 11, "декабр": 12,
+    "январ": 1,
+    "феврал": 2,
+    "март": 3,
+    "апрел": 4,
+    "ма[йяюе]": 5,
+    "июн": 6,
+    "июл": 7,
+    "август": 8,
+    "сентябр": 9,
+    "октябр": 10,
+    "ноябр": 11,
+    "декабр": 12,
 }
 
 ORDINALS = {
-    "первого": 1, "второго": 2, "третьего": 3, "четвёртого": 4, "четвертого": 4,
-    "пятого": 5, "шестого": 6, "седьмого": 7, "восьмого": 8, "девятого": 9,
-    "десятого": 10, "пятнадцатого": 15, "двадцатого": 20, "двадцать первого": 21,
-    "двадцать пятого": 25, "тридцатого": 30,
+    "первого": 1,
+    "второго": 2,
+    "третьего": 3,
+    "четвёртого": 4,
+    "четвертого": 4,
+    "пятого": 5,
+    "шестого": 6,
+    "седьмого": 7,
+    "восьмого": 8,
+    "девятого": 9,
+    "десятого": 10,
+    "пятнадцатого": 15,
+    "двадцатого": 20,
+    "двадцать первого": 21,
+    "двадцать пятого": 25,
+    "тридцатого": 30,
 }
 
 
 @dataclass
 class Resolution:
     resolved: date | None = None
-    precision: str = "none"  # exact | approximate | month_only | relative_unresolved | none
+    precision: DatePrecision = "none"
     basis: str = ""
     flags: list[str] = field(default_factory=list)
 
@@ -88,19 +116,27 @@ def resolve(expression: str, anchor: date) -> Resolution:
             try:
                 d = date(year, month, day)
             except ValueError:
-                return Resolution(precision="relative_unresolved",
-                                  basis=f"некорректная дата {day}.{month}",
-                                  flags=["невалидная дата"])
+                return Resolution(
+                    precision="relative_unresolved",
+                    basis=f"некорректная дата {day}.{month}",
+                    flags=["невалидная дата"],
+                )
             flags = []
             if not m.group(3) and year != anchor.year:
-                flags.append(f"год не назван — вычислен как {year} (месяц уже прошёл в {anchor.year})")
+                flags.append(
+                    f"год не назван — вычислен как {year} "
+                    f"(месяц уже прошёл в {anchor.year})"
+                )
             return Resolution(d, "exact", f"явная дата в тексте: {day} {word}", flags)
 
     # 2) сегодня / завтра / послезавтра
     for word, offset in (("послезавтра", 2), ("сегодня", 0), ("завтра", 1)):
         if word in e:
-            return Resolution(anchor + timedelta(days=offset), "exact",
-                              f"«{word}» от {anchor.isoformat()}")
+            return Resolution(
+                anchor + timedelta(days=offset),
+                "exact",
+                f"«{word}» от {anchor.isoformat()}",
+            )
 
     # 3) «после двадцатого», «после 20 числа»
     # цифровая форма обязана нести маркер «числа»/«-го», иначе «после 11:00» (время)
@@ -116,38 +152,54 @@ def resolve(expression: str, anchor: date) -> Resolution:
         month = _find_month(e)
         if month:
             year = _resolve_month_year(month, anchor)
+            after: date | None
             try:
-                d = date(year, month, ordinal_day) + timedelta(days=1)
+                after = date(year, month, ordinal_day) + timedelta(days=1)
             except ValueError:
-                d = None
+                after = None
+            shown = after.isoformat() if after else "?"
             return Resolution(
-                d, "approximate",
-                f"«после {ordinal_day}-го» {month:02d}.{year} → не ранее {d.isoformat() if d else '?'}",
+                after,
+                "approximate",
+                f"«после {ordinal_day}-го» {month:02d}.{year} → не ранее {shown}",
                 ["граница «после N-го» приблизительная: точная дата не названа"],
             )
-        return Resolution(None, "relative_unresolved",
-                          f"«после {ordinal_day}-го», но месяц не определён",
-                          ["месяц для «после N-го» не назван"])
+        return Resolution(
+            None,
+            "relative_unresolved",
+            f"«после {ordinal_day}-го», но месяц не определён",
+            ["месяц для «после N-го» не назван"],
+        )
 
     # 4) день недели
-    skip_week = bool(re.search(r"следующ\w*\s+(?:недел|\w*)", e)) and "на следующей неделе" not in e
+    skip_week = (
+        bool(re.search(r"следующ\w*\s+(?:недел|\w*)", e))
+        and "на следующей неделе" not in e
+    )
     for stem, idx in WEEKDAY_PATTERNS:
         if re.search(rf"\b{stem}", e):
             d = _next_weekday(anchor, idx, skip_week=skip_week)
             label = WEEKDAYS_RU[idx]
-            basis = f"ближайш{'ий' if idx in (0,1,3) else 'ая'} {label} после {anchor.isoformat()}"
+            ending = "ий" if idx in (0, 1, 3) else "ая"
+            basis = f"ближайш{ending} {label} после {anchor.isoformat()}"
             flags = []
             if skip_week:
                 basis += " (+неделя по «следующий»)"
-                flags.append("«следующий <день>» трактуется как +1 неделя — возможна неоднозначность")
+                flags.append(
+                    "«следующий <день>» трактуется как +1 неделя — "
+                    "возможна неоднозначность"
+                )
             return Resolution(d, "exact", basis, flags)
 
     # 5) «на следующей неделе» — недели хватает, дня нет
     if "на следующей неделе" in e or "следующей неделе" in e:
         monday = _next_weekday(anchor, 0)
-        return Resolution(monday, "approximate",
-                          f"начало следующей недели от {anchor.isoformat()}",
-                          ["конкретный день недели не назван"])
+        return Resolution(
+            monday,
+            "approximate",
+            f"начало следующей недели от {anchor.isoformat()}",
+            ["конкретный день недели не назван"],
+        )
 
     # 6) «два-три рабочих дня», «через неделю»
     m = re.search(r"(?:через\s+)?(\d+)[-–—]?(?:\s*(\d+))?\s+рабочи\w+\s+дн", e)
@@ -155,19 +207,30 @@ def resolve(expression: str, anchor: date) -> Resolution:
         lo = int(m.group(1))
         hi = int(m.group(2)) if m.group(2) else lo
         d = _add_business_days(anchor, hi)
-        return Resolution(d, "approximate",
-                          f"{lo}-{hi} рабочих дней от {anchor.isoformat()} → не ранее {d.isoformat()}",
-                          [f"интервал {lo}-{hi} дн.: взята поздняя граница"])
+        return Resolution(
+            d,
+            "approximate",
+            f"{lo}-{hi} рабочих дней от {anchor.isoformat()} "
+            f"→ не ранее {d.isoformat()}",
+            [f"интервал {lo}-{hi} дн.: взята поздняя граница"],
+        )
     if "два-три рабочих" in e or "две-три рабочих" in e:
         d = _add_business_days(anchor, 3)
-        return Resolution(d, "approximate", f"2-3 рабочих дня → не ранее {d.isoformat()}",
-                          ["интервал 2-3 дн.: взята поздняя граница"])
+        return Resolution(
+            d,
+            "approximate",
+            f"2-3 рабочих дня → не ранее {d.isoformat()}",
+            ["интервал 2-3 дн.: взята поздняя граница"],
+        )
     m = re.search(r"через\s+(\d+)\s+(день|дня|дней|недел\w+)", e)
     if m:
         n = int(m.group(1))
         days = n * 7 if m.group(2).startswith("недел") else n
-        return Resolution(anchor + timedelta(days=days), "approximate",
-                          f"через {n} {m.group(2)} от {anchor.isoformat()}")
+        return Resolution(
+            anchor + timedelta(days=days),
+            "approximate",
+            f"через {n} {m.group(2)} от {anchor.isoformat()}",
+        )
 
     # 7) только месяц: «в декабре», «во второй половине января»
     month = _find_month(e)
@@ -178,14 +241,18 @@ def resolve(expression: str, anchor: date) -> Resolution:
         if year != anchor.year:
             flags.append(f"год не назван — вычислен как {year}")
         return Resolution(
-            None, "month_only",
+            None,
+            "month_only",
             f"месяц {month:02d}.{year}" + (" (вторая половина)" if half else ""),
             flags,
         )
 
-    return Resolution(None, "relative_unresolved",
-                      f"выражение «{expression}» не разобрано резолвером",
-                      ["выражение не распознано — проверить вручную"])
+    return Resolution(
+        None,
+        "relative_unresolved",
+        f"выражение «{expression}» не разобрано резолвером",
+        ["выражение не распознано — проверить вручную"],
+    )
 
 
 def _find_month(text: str) -> int | None:

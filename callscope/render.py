@@ -13,9 +13,10 @@ from __future__ import annotations
 import csv
 import html
 import io
+from collections.abc import Sequence
 from datetime import date
 
-from .models import CallAnalysis, DateRef, Item, NextStep
+from .models import CallAnalysis, Constraint, DateRef, Item, NextStep
 
 CONF_LABEL = {"high": "высокая", "medium": "средняя", "low": "низкая"}
 OUTCOME_LABEL = {
@@ -32,8 +33,20 @@ PRECISION_LABEL = {
     "none": "нет",
 }
 
-RU_MONTHS_GEN = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля",
-                 "августа", "сентября", "октября", "ноября", "декабря"]
+RU_MONTHS_GEN = [
+    "января",
+    "февраля",
+    "марта",
+    "апреля",
+    "мая",
+    "июня",
+    "июля",
+    "августа",
+    "сентября",
+    "октября",
+    "ноября",
+    "декабря",
+]
 
 
 def e(s: object) -> str:
@@ -44,15 +57,19 @@ def fmt_date(d: date | None) -> str:
     return f"{d.day} {RU_MONTHS_GEN[d.month - 1]} {d.year}" if d else "—"
 
 
-def _evidence_html(item: Item | NextStep | DateRef) -> str:
+def _evidence_html(item: Item | NextStep | DateRef | Constraint) -> str:
     if not item.evidence:
         return ""
     parts = []
     for ev in item.evidence:
-        cls = "ev-ok" if ev.verified else ("ev-bad" if ev.verified is False else "ev-unk")
+        cls = (
+            "ev-ok" if ev.verified else ("ev-bad" if ev.verified is False else "ev-unk")
+        )
         mark = "✓" if ev.verified else ("✗" if ev.verified is False else "?")
         who = f"<b>{e(ev.speaker)}:</b> " if ev.speaker else ""
-        parts.append(f'<li class="{cls}"><span class="mk">{mark}</span>{who}«{e(ev.quote)}»</li>')
+        parts.append(
+            f'<li class="{cls}"><span class="mk">{mark}</span>{who}«{e(ev.quote)}»</li>'
+        )
     return f'<ul class="ev">{"".join(parts)}</ul>'
 
 
@@ -71,7 +88,8 @@ def _items_html(items: list[Item]) -> str:
         rows.append(
             f'<li class="item{" unverified" if bad else ""}">'
             f'<div class="txt">{e(it.text)}'
-            f'<span class="conf c-{it.confidence.value}">{CONF_LABEL[it.confidence.value]}</span></div>'
+            f'<span class="conf c-{it.confidence.value}">'
+            f"{CONF_LABEL[it.confidence.value]}</span></div>"
             f"{_flags_html(it.flags)}{_evidence_html(it)}</li>"
         )
     return f'<ul class="items">{"".join(rows)}</ul>'
@@ -89,7 +107,7 @@ def _date_html(d: DateRef | None) -> str:
         f'<div class="dateblock">'
         f'<div class="dateval">{val}</div>'
         f'<div class="datemeta">из фразы «{e(d.raw_expression)}» · '
-        f'точность: {PRECISION_LABEL.get(d.precision, d.precision)}</div>'
+        f"точность: {PRECISION_LABEL.get(d.precision, d.precision)}</div>"
         f'<div class="datebasis">{e(d.basis)}</div>'
         f"{_flags_html(d.flags)}{_evidence_html(d)}</div>"
     )
@@ -101,7 +119,8 @@ def _steps_html(steps: list[NextStep]) -> str:
     rows = []
     for s in steps:
         badge = (
-            '<span class="agreed yes">согласовано</span>' if s.agreed
+            '<span class="agreed yes">согласовано</span>'
+            if s.agreed
             else '<span class="agreed no">НЕ согласовано — клиент не подтвердил</span>'
         )
         d = ""
@@ -111,7 +130,10 @@ def _steps_html(steps: list[NextStep]) -> str:
                 d += f", {e(s.date.time)}"
             d += "</span>"
         elif s.date:
-            d = f'<span class="stepdate none">«{e(s.date.raw_expression)}» — без точной даты</span>'
+            d = (
+                '<span class="stepdate none">'
+                f"«{e(s.date.raw_expression)}» — без точной даты</span>"
+            )
         rows.append(
             f'<li class="item{"" if s.agreed else " rejected"}">'
             f'<div class="txt">{e(s.action)}{badge}{d}'
@@ -144,16 +166,21 @@ def _card(a: CallAnalysis) -> str:
     constraints = ""
     if a.constraints:
         constraints = (
-            '<section><h3>Ограничения клиента <small>(не действия)</small></h3><ul class="items">'
+            "<section><h3>Ограничения клиента <small>(не действия)</small></h3>"
+            '<ul class="items">'
             + "".join(
-                f'<li class="item"><div class="txt">{e(c.text)}</div>{_evidence_html(c)}</li>'
+                f'<li class="item"><div class="txt">{e(c.text)}</div>'
+                f"{_evidence_html(c)}</li>"
                 for c in a.constraints
             )
             + "</ul></section>"
         )
     dm = ""
     if a.decision_makers:
-        dm = f'<div class="dm">Решение принимают: <b>{e(", ".join(a.decision_makers))}</b></div>'
+        dm = (
+            '<div class="dm">Решение принимают: '
+            f"<b>{e(', '.join(a.decision_makers))}</b></div>"
+        )
 
     return f"""
 <article class="call">
@@ -177,7 +204,7 @@ def _card(a: CallAnalysis) -> str:
   <section><h3>Ошибки менеджера</h3>{_items_html(a.manager_mistakes)}</section>
   <section><h3>Требует внимания руководителя</h3>{_items_html(a.needs_supervisor_attention)}</section>
   {constraints}{gaps}{vflags}
-</article>"""
+</article>"""  # noqa: E501  # HTML-шаблон: перенос строк меняет вёрстку
 
 
 CSS = """
@@ -230,7 +257,7 @@ h3 small{text-transform:none;letter-spacing:0;font-weight:400}
 .datemeta{font-size:12.5px;color:#5c6672;margin-top:3px}
 .datebasis{font-size:12px;color:#7a8593;margin-top:2px;font-style:italic}
 .empty{color:#a9b2bd;font-style:italic;margin:0;font-size:13.5px}
-"""
+"""  # noqa: E501  # CSS одной строкой на правило, перенос ухудшит читаемость
 
 
 def render_html(results: list[CallAnalysis]) -> str:
@@ -250,7 +277,7 @@ def render_html(results: list[CallAnalysis]) -> str:
   <span><i class="dot" style="background:#e0a03a"></i>флаг валидации или неоднозначность</span>
 </div>
 {cards}
-</div></body></html>"""
+</div></body></html>"""  # noqa: E501  # HTML-шаблон
 
 
 def render_markdown(results: list[CallAnalysis]) -> str:
@@ -266,20 +293,30 @@ def render_markdown(results: list[CallAnalysis]) -> str:
             if nad.timezone:
                 when += f" ({nad.timezone})"
         elif nad:
-            when = f"«{nad.raw_expression}» — точной даты нет ({PRECISION_LABEL.get(nad.precision, '')})"
+            label = PRECISION_LABEL.get(nad.precision, "")
+            when = f"«{nad.raw_expression}» — точной даты нет ({label})"
 
         agreed = [s for s in a.next_steps if s.agreed]
         rejected = [s for s in a.next_steps if not s.agreed]
 
-        def bullets(items: list) -> str:
+        def bullets(items: Sequence[Item | NextStep | Constraint]) -> str:
             if not items:
                 return "— нет данных в разговоре"
-            return "<br>".join(f"• {getattr(i, 'text', getattr(i, 'action', ''))}" for i in items)
+            return "<br>".join(
+                f"• {getattr(i, 'text', getattr(i, 'action', ''))}" for i in items
+            )
 
-        out.append(f"\n## {a.company or a.source_file} — {a.call_date.isoformat()} ({a.call_weekday})\n")
-        out.append(f"**Менеджер:** {a.manager} · **Клиент:** {a.client_contact} · "
-                   f"**Статус:** {a.outcome} · **Цитаты подтверждены:** "
-                   f"{a.grounding_score:.0%}\n" if a.grounding_score is not None else "\n")
+        out.append(
+            f"\n## {a.company or a.source_file} — {a.call_date.isoformat()} "
+            f"({a.call_weekday})\n"
+        )
+        out.append(
+            f"**Менеджер:** {a.manager} · **Клиент:** {a.client_contact} · "
+            f"**Статус:** {a.outcome} · **Цитаты подтверждены:** "
+            f"{a.grounding_score:.0%}\n"
+            if a.grounding_score is not None
+            else "\n"
+        )
         out.append("| Поле | Значение |")
         out.append("|---|---|")
         out.append(f"| Итог разговора | {a.summary} |")
@@ -288,46 +325,78 @@ def render_markdown(results: list[CallAnalysis]) -> str:
         out.append(f"| Потребности клиента | {bullets(a.client_needs)} |")
         out.append(f"| Риски | {bullets(a.risks)} |")
         out.append(f"| Ошибки менеджера | {bullets(a.manager_mistakes)} |")
-        out.append(f"| Внимание руководителя | {bullets(a.needs_supervisor_attention)} |")
+        out.append(
+            f"| Внимание руководителя | {bullets(a.needs_supervisor_attention)} |"
+        )
         if rejected:
             out.append(f"| ⚠ Предложено, но НЕ согласовано | {bullets(rejected)} |")
         if a.constraints:
             out.append(f"| Ограничения клиента | {bullets(a.constraints)} |")
         if a.data_gaps:
-            out.append("| Недостаточно данных | "
-                       + "<br>".join(f"• {g}" for g in a.data_gaps) + " |")
+            out.append(
+                "| Недостаточно данных | "
+                + "<br>".join(f"• {g}" for g in a.data_gaps)
+                + " |"
+            )
         # флаги валидации — единственный признак того, что цитата не подтвердилась,
         # поэтому в markdown-версии они обязаны быть видны так же, как в HTML
         if a.validation_flags:
-            out.append("| ⚠ Флаги валидации | "
-                       + "<br>".join(f"• {f}" for f in a.validation_flags) + " |")
+            out.append(
+                "| ⚠ Флаги валидации | "
+                + "<br>".join(f"• {f}" for f in a.validation_flags)
+                + " |"
+            )
     return "\n".join(out) + "\n"
 
 
 def render_csv(results: list[CallAnalysis]) -> str:
     buf = io.StringIO()
     w = csv.writer(buf, delimiter=";")
-    w.writerow([
-        "Файл", "Компания", "Дата звонка", "Менеджер", "Клиент", "Итог (статус)",
-        "Итог разговора", "Следующий шаг (согласованный)", "Дата следующего действия",
-        "Точность даты", "Потребности", "Риски", "Ошибки менеджера",
-        "Внимание руководителя", "Недостаточно данных", "Флаги", "Цитаты подтверждены",
-    ])
+    w.writerow(
+        [
+            "Файл",
+            "Компания",
+            "Дата звонка",
+            "Менеджер",
+            "Клиент",
+            "Итог (статус)",
+            "Итог разговора",
+            "Следующий шаг (согласованный)",
+            "Дата следующего действия",
+            "Точность даты",
+            "Потребности",
+            "Риски",
+            "Ошибки менеджера",
+            "Внимание руководителя",
+            "Недостаточно данных",
+            "Флаги",
+            "Цитаты подтверждены",
+        ]
+    )
     for a in results:
         agreed = [s for s in a.next_steps if s.agreed]
         nad = a.next_action_date
-        w.writerow([
-            a.source_file, a.company or "", a.call_date.isoformat(), a.manager or "",
-            a.client_contact or "", a.outcome, a.summary,
-            " | ".join(s.action for s in agreed),
-            fmt_date(nad.resolved) + (f", {nad.time}" if nad and nad.time else "") if nad else "—",
-            PRECISION_LABEL.get(nad.precision, "") if nad else "",
-            " | ".join(i.text for i in a.client_needs),
-            " | ".join(i.text for i in a.risks),
-            " | ".join(i.text for i in a.manager_mistakes),
-            " | ".join(i.text for i in a.needs_supervisor_attention),
-            " | ".join(a.data_gaps),
-            " | ".join(a.validation_flags),
-            f"{a.grounding_score:.0%}" if a.grounding_score is not None else "—",
-        ])
+        w.writerow(
+            [
+                a.source_file,
+                a.company or "",
+                a.call_date.isoformat(),
+                a.manager or "",
+                a.client_contact or "",
+                a.outcome,
+                a.summary,
+                " | ".join(s.action for s in agreed),
+                fmt_date(nad.resolved) + (f", {nad.time}" if nad and nad.time else "")
+                if nad
+                else "—",
+                PRECISION_LABEL.get(nad.precision, "") if nad else "",
+                " | ".join(i.text for i in a.client_needs),
+                " | ".join(i.text for i in a.risks),
+                " | ".join(i.text for i in a.manager_mistakes),
+                " | ".join(i.text for i in a.needs_supervisor_attention),
+                " | ".join(a.data_gaps),
+                " | ".join(a.validation_flags),
+                f"{a.grounding_score:.0%}" if a.grounding_score is not None else "—",
+            ]
+        )
     return buf.getvalue()
