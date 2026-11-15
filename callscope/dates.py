@@ -60,12 +60,25 @@ ORDINALS = {
     "восьмого": 8,
     "девятого": 9,
     "десятого": 10,
+    "одиннадцатого": 11,
+    "двенадцатого": 12,
+    "тринадцатого": 13,
+    "четырнадцатого": 14,
     "пятнадцатого": 15,
+    "шестнадцатого": 16,
+    "семнадцатого": 17,
+    "восемнадцатого": 18,
+    "девятнадцатого": 19,
     "двадцатого": 20,
-    "двадцать первого": 21,
-    "двадцать пятого": 25,
     "тридцатого": 30,
 }
+# составные 21–29 и 31 строятся из единиц, чтобы не писать их руками
+ORDINALS.update({f"двадцать {w}": 20 + n for w, n in list(ORDINALS.items()) if n < 10})
+ORDINALS["тридцать первого"] = 31
+# длинные формы первыми: «двадцать первого» не должно съесться как «первого»
+_ORDINAL_RE = re.compile(
+    r"\b(" + "|".join(sorted(ORDINALS, key=len, reverse=True)) + r")(?![а-яё])"
+)
 
 
 @dataclass
@@ -171,6 +184,36 @@ def resolve(expression: str, anchor: date) -> Resolution:
             ["месяц для «после N-го» не назван"],
         )
 
+    # 3б) «восемнадцатого ноября», «не позже восемнадцатого»
+    m = _ORDINAL_RE.search(e)
+    if m:
+        day = ORDINALS[m.group(1)]
+        month = _find_month(e)
+        if month:
+            year = _resolve_month_year(month, anchor)
+            try:
+                d = date(year, month, day)
+            except ValueError:
+                return Resolution(
+                    precision="relative_unresolved",
+                    basis=f"некорректная дата {day}.{month}",
+                    flags=["невалидная дата"],
+                )
+            return Resolution(d, "exact", f"день словом: {m.group(1)}")
+        nearest = _nearest_future_day(day, anchor)
+        if nearest is None:
+            return Resolution(
+                precision="relative_unresolved",
+                basis=f"в ближайшие месяцы нет дня {day}",
+                flags=["невалидная дата"],
+            )
+        return Resolution(
+            nearest,
+            "exact",
+            f"«{m.group(1)}» без месяца → ближайшее {nearest.isoformat()}",
+            ["месяц не назван — взят ближайший подходящий"],
+        )
+
     # 4) день недели
     skip_week = (
         bool(re.search(r"следующ\w*\s+(?:недел|\w*)", e))
@@ -253,6 +296,19 @@ def resolve(expression: str, anchor: date) -> Resolution:
         f"выражение «{expression}» не разобрано резолвером",
         ["выражение не распознано — проверить вручную"],
     )
+
+
+def _nearest_future_day(day: int, anchor: date) -> date | None:
+    """Ближайшее число `day` не раньше якоря; месяцы без такого дня пропускаются."""
+    for offset in range(3):
+        total = anchor.year * 12 + anchor.month - 1 + offset
+        try:
+            d = date(total // 12, total % 12 + 1, day)
+        except ValueError:
+            continue
+        if d >= anchor:
+            return d
+    return None
 
 
 def _find_month(text: str) -> int | None:
